@@ -1,0 +1,241 @@
+---
+title: "MEng project R notebook"
+output: html_London_notebook
+---
+
+
+```{r}
+tab = read.csv("C:/Users/dongb/Google Drive/London/Data/dft_traffic_counts_raw_counts/dft_traffic_counts_raw_counts.csv")
+```
+
+```{r}
+# sort by id
+tab = tab[order(tab$count_point_id,tab$count_date,tab$hour),]
+# find ranges for each id, for later search usage
+id_ranges = c()
+curr = tab$count_point_id[1]
+start_idx = 1
+id_lst = tab$count_point_id
+for (idx in 2:length(id_lst)) {
+  if (id_lst[idx]!=curr || idx==length(id_lst)) {
+    id_ranges = append(id_ranges,c(curr,start_idx,idx-1))
+    curr = id_lst[idx]
+    start_idx = idx
+  }
+}
+
+# check this worked
+cpen=0
+for (i in 1:(length(id_ranges)/3)) {
+  if (i!=length(id_ranges)/3 && (cpen+1)!=id_ranges[(3*i-1)]) {
+    print("huhhh")
+  }
+  cpid = id_ranges[(3*i-2)]
+  cpst = id_ranges[(3*i-1)]
+  cpen = id_ranges[(3*i)]
+  ls = tab[cpst:cpen,c("count_point_id")]
+  if (!(all(ls==cpid))) {
+    print("whatttt")
+  }
+}
+```
+
+```{r}
+print(length(tab[tab$year==2018,][[1]]))
+```
+
+
+```{r}
+# inspect data
+head(tab)
+keys = colnames(tab)
+keys
+```
+
+```{r}
+print("total num of obs.")
+print(length(tab[["count_point_id"]]))
+
+count_id_vec = unique(tab[["count_point_id"]])
+print("num of unique ids")
+print(length(count_id_vec))
+
+uniq_loc = unique(tab[c("latitude","longitude")])
+print("num of unique (lat,long) pairs")
+length(uniq_loc[[1]])
+
+print("num obs. if one site recorded hourly from 2000-2018")
+print(12*2*365*19)
+
+print("num of unique count dates")
+uniq_loc = unique(tab["count_date"])
+length(uniq_loc[[1]])
+
+print("num of days in 2000-2018")
+print(365*19)
+```
+
+
+```{r}
+# ids whose location changes over time
+diff_vec = rep(FALSE,length(count_id_vec)) # whether loc changes
+diff_type = rep(FALSE,length(count_id_vec)) # how it changes
+yr_vec = rep(0,length(count_id_vec)) # how many years per id
+
+for (idx in 1:length(count_id_vec)) {
+  cid = id_ranges[(3*idx-2)]
+  cstart = id_ranges[(3*idx-1)]
+  cend = id_ranges[(3*idx)]
+  ls = tab[cstart:cend,c("count_date","longitude","latitude")]
+  if (!(all(ls[,2]==ls[1,2]) && all(ls[,3]==ls[1,3]))) {
+      diff_vec[idx] = TRUE
+      ls_uni =unique(ls[,c("longitude","latitude")])
+      
+      if (all(as.integer(ls_uni[2,])==ls_uni[2,])) {
+        diff_type[idx] = -1
+      } else {
+        diff_type[idx] = 1
+      }
+      if (idx<500) {
+        ls_uni$count_point_id = cid
+        print(ls_uni)
+      }
+  }
+  yr_vec[idx] = length(unique(tab[cstart:cend,"year"]))
+}
+```
+
+```{r}
+max(yr_vec)
+min(yr_vec)
+mean(yr_vec)
+length(yr_vec[yr_vec>10])/length(yr_vec)
+```
+
+```{r}
+newstuff = tab[tab$year>2016,]
+```
+
+```{r}
+
+newcpid = unique(newstuff$count_point_id)
+print(length(newcpid)/length(count_id_vec))
+```
+
+
+```{r}
+print(mean(diff_vec))
+print(mean(diff_type==-1))
+print(mean(diff_type==1))
+```
+
+```{r}
+num_obs_per_id = rep(0,length(count_id_vec))
+for (ii in 1:(length(id_ranges)/3)) {
+  num_obs_per_id[ii]=id_ranges[3*ii]-id_ranges[3*ii-1]+1
+}
+```
+
+```{r}
+#hist(num_obs_per_id,breaks=20)
+barplot(num_obs_per_id)
+#abline(v=12*2*19)
+print(12*2*365*19)
+print(12*2*19)
+```
+
+```{r}
+y = unlist(tab[["count_point_id"]])
+ty = table(y)              # the number of observations under each count id
+# above400 = ty[ty>400]
+max_cnt = ty[ty==max(ty)]
+max_cnt
+```
+
+```{r}
+max_id = as.numeric(names(max_cnt)) # count ids that achieve the maximum
+max_id
+above_thres_id = as.numeric(names(ty[ty>400]))
+length(above_thres_id)
+```
+
+```{r}
+counts_tab = tab[tab[["count_point_id"]]==6040,c("count_date","hour","direction_of_travel","longitude","latitude")]
+show(counts_tab)
+```
+
+
+```{r}
+# ## TODO optimize search
+# avg_obs = 0
+# for (cid in above_thres_id[]) {
+#   counts_tab = tab[tab[["count_point_id"]]==cid,"count_date"]
+#   avg_obs = avg_obs + length(unique(counts_tab[]))
+# }
+# avg_obs = avg_obs/length(max_id)
+# avg_obs
+# length(levels(counts_tab[]))
+# print(365*19)
+```
+
+
+```{r}
+for (i in 1:2) {
+  counts_tab = tab[tab[["count_point_id"]]==max_id[i],c("year","count_date","hour","all_motor_vehicles")]
+  c_what = counts_tab[with(counts_tab, order(year,count_date,hour)),]
+  newc_one = c_what[seq(1,length(c_what[[1]]),by=2),]
+  newc_two = c_what[seq(2,length(c_what[[1]]),by=2),]
+  newc_one[4] = newc_one[4]+newc_two[4]
+  show(newc_one)
+  for (i in seq(1,228/12)) {
+    datee = newc_one[(((i-1)*12+1):(i*12)),"count_date"]
+    if (length(unique(datee))!=1) {
+      print("huh")
+    }
+    hour_of_day = newc_one[(((i-1)*12+1):(i*12)),3]
+    all_motor_count = newc_one[(((i-1)*12+1):(i*12)),4]
+    plot.ts(hour_of_day,all_motor_count)
+    title(paste(toString(newc_one[i*12,"count_date"])))
+  }
+}
+```
+
+
+```{r}
+for (i in 1:2) {
+  counts_tab = tab[tab[["count_point_id"]]==max_id[i],c("year","count_date","hour","all_hgvs")]
+  c_what = counts_tab[with(counts_tab, order(year,count_date,hour)),]
+  newc_one = c_what[seq(1,length(c_what[[1]]),by=2),]
+  newc_two = c_what[seq(2,length(c_what[[1]]),by=2),]
+  newc_one[4] = newc_one[4]+newc_two[4]
+  show(newc_one)
+  for (i in seq(1,228/12)) {
+    hour_of_day = newc_one[(((i-1)*12+1):(i*12)),3]
+    hgvs_count = newc_one[(((i-1)*12+1):(i*12)),4]
+    plot.ts(hour_of_day,hgvs_count)
+    title(paste(toString(newc_one[i*12,"count_date"])))
+  }
+}
+```
+
+
+```{r}
+# ARIMA
+library(forecast)
+ls = as.numeric(names(ty[ty==max(ty)]))
+for (ind in as.numeric(names(ty[ty==max(ty)]))) {
+  print('')
+  print(ind)
+  counts_tab = tab[tab[["count_point_id"]]==ind,c("year","count_date","hour","all_hgvs")]
+  c_what = counts_tab[with(counts_tab, order(year,count_date,hour)),]
+  newc_one = c_what[seq(1,length(c_what[[1]]),by=2),]
+  newc_two = c_what[seq(2,length(c_what[[1]]),by=2),]
+  newc_one[4] = newc_one[4]+newc_two[4]
+  plot.ts(newc_one[4])
+  fit = auto.arima(newc_one[4],seasonal=TRUE,ic="bic")
+  show(fit)
+}
+```
+
+
+
